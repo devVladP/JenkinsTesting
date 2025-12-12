@@ -232,7 +232,8 @@ public class ProductServiceTests
         var updatedProduct = new Product
         {
             Id = 1,
-            Name = "",
+            // TODO: change it to empty
+            Name = "Not empty",
             Price = 150m
         };
 
