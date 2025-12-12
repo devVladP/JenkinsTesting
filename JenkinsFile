@@ -1,23 +1,85 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['build-and-deploy', 'deploy-existing'],
+            description: 'Build new or deploy existing build?'
+        )
+        string(
+            name: 'BUILD_NUMBER_TO_DEPLOY',
+            defaultValue: 'lastSuccessfulBuild',
+            description: 'Build number to deploy (for deploy-existing)'
+        )
+    }
+
     stages {
+        stage('Copy Existing Artifacts') {
+            when {
+                expression { params.ACTION == 'deploy-existing' }
+            }
+            steps {
+                echo "Deploying build #${params.BUILD_NUMBER_TO_DEPLOY}"
+                copyArtifacts(
+                    projectName: env.JOB_NAME,
+                    selector: specific("${params.BUILD_NUMBER_TO_DEPLOY}"),
+                    filter: '**/bin/Release/**',
+                    fingerprintArtifacts: true
+                )
+            }
+        }
+
         stage('Restore') {
+            when {
+                expression { params.ACTION == 'build-and-deploy' }
+            }
             steps {
                 sh 'dotnet restore'
             }
         }
 
         stage('Build') {
+            when {
+                expression { params.ACTION == 'build-and-deploy' }
+            }
             steps {
                 sh 'dotnet build -c Release'
             }
         }
 
         stage('Test') {
+            when {
+                expression { params.ACTION == 'build-and-deploy' }
+            }
             steps {
                 sh 'dotnet test'
             }
+        }
+
+        stage('Archive Artifacts') {
+            when {
+                expression { params.ACTION == 'build-and-deploy' }
+            }
+            steps {
+                archiveArtifacts artifacts: '**/bin/Release/**/*.dll, **/bin/Release/**/*.exe, **/bin/Release/**/*.json',
+                                 fingerprint: true,
+                                 allowEmptyArchive: false
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo "Deploying to server..."
+                // Add your deployment commands here
+                // sh './deploy.sh'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Build #${env.BUILD_NUMBER} successful"
         }
     }
 }
